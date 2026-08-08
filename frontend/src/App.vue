@@ -176,9 +176,11 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); clearTimeout(clickTimer); win
 
 <template>
   <div class="app-shell">
+    <button class="primary sidebar-trigger left-trigger" @click="leftOpen = !leftOpen" :title="leftOpen ? '关闭目录' : '打开目录'" :aria-label="leftOpen ? '关闭目录' : '打开目录'" :aria-expanded="leftOpen" aria-controls="library-drawer"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+    <button class="primary sidebar-trigger right-trigger" @click="rightOpen = !rightOpen" :title="rightOpen ? '关闭设置' : '打开设置'" :aria-label="rightOpen ? '关闭设置' : '打开设置'" :aria-expanded="rightOpen" aria-controls="settings-drawer"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg></button>
     <header class="topbar">
       <div class="topbar-left">
-        <button class="icon-button nav-trigger" @click="leftOpen = true" title="打开目录" aria-label="打开目录"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+        <span class="sidebar-trigger-slot" aria-hidden="true"></span>
         <div class="location">
           <nav class="breadcrumbs" aria-label="当前位置"><button @click="loadAlbums(null)">相册</button><template v-for="crumb in crumbs" :key="crumb.id"><span>›</span><button @click="loadAlbums(crumb.id)">{{ crumb.name }}</button></template></nav>
           <div class="title-row"><button v-if="current" class="back" @click="goBack" title="返回上级" aria-label="返回上级"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg></button><h1>{{ current?.name || '全部相册' }}</h1><span>{{ albums.length }}</span></div>
@@ -192,7 +194,7 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); clearTimeout(clickTimer); win
           <button :class="{ active: layout === 'horizontal' }" @click="setLayout('horizontal')" title="横向卡片" aria-label="横向卡片"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /></svg></button>
         </div>
         <button class="icon-button" :class="{ spinning: loading }" @click="refresh" title="刷新相册" aria-label="刷新相册"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.4 9A7 7 0 0 0 6.8 6.4L4 11m16 2-2.8 4.6A7 7 0 0 1 5.6 15" /></svg></button>
-        <button class="primary add-button" @click="rightOpen = true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg><span>添加/设置</span></button>
+        <span class="sidebar-trigger-slot" aria-hidden="true"></span>
       </div>
     </header>
 
@@ -210,16 +212,15 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); clearTimeout(clickTimer); win
       </section>
     </main>
 
-    <div class="scrim" :class="{ visible: leftOpen || rightOpen }" @click="escape"></div>
-    <aside class="drawer left" :class="{ open: leftOpen }">
-      <div class="drawer-title"><div><span>资料库</span><b>相册目录</b></div><button @click="leftOpen = false" aria-label="关闭">×</button></div>
+    <aside id="library-drawer" class="drawer left" :class="{ open: leftOpen }">
+      <div class="drawer-title"><div><span>资料库</span><b>相册目录</b></div></div>
       <div class="search-wrap"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input v-model="query" class="search" placeholder="搜索名称或路径" /></div>
       <div class="section-label"><span>目录树</span><em>{{ tree.length }}</em></div>
       <div class="tree"><TreeNode v-for="node in tree" :key="node.album.id" :node="node" :current-id="current?.id" :expand-all="!!query" @enter="album => { enter(album); leftOpen = false }" @menu="showMenu" /><p v-if="!tree.length" class="muted">没有匹配的相册</p></div>
       <section class="task-section"><div class="section-label"><span>任务记录</span><em>{{ events.length }}</em></div><div class="task-log"><p v-if="!events.length" class="muted"><time>--:--:--</time><b>等待</b><span>暂无任务</span></p><p v-for="(event, i) in events" :key="i" :class="event.type"><time>{{ event.time }}</time><b>{{ eventLabels[event.type] }}</b><span>{{ event.text }}</span></p></div></section>
     </aside>
-    <aside class="drawer right" :class="{ open: rightOpen }">
-      <div class="drawer-title"><div><span>管理</span><b>添加与设置</b></div><button @click="rightOpen = false" aria-label="关闭">×</button></div>
+    <aside id="settings-drawer" class="drawer right" :class="{ open: rightOpen }">
+      <div class="drawer-title"><div><span>管理</span><b>添加与设置</b></div></div>
       <section class="setting-group"><div class="section-label"><span>扫描路径</span><em>每行一个</em></div><textarea v-model="scanPaths" rows="8" spellcheck="false" placeholder="D:/Pictures&#10;D:/Albums/books.zip"></textarea><label class="check"><input v-model="recursive" type="checkbox" /><i></i><span>递归扫描子目录</span></label><button class="primary wide" :disabled="loading || !scanPaths.trim()" @click="scan"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>{{ loading ? '正在处理' : '添加并扫描' }}</button></section>
       <section class="setting-group"><div class="section-label"><span>封面比例</span></div><div class="segment"><button :class="{ active: layout === 'vertical' }" @click="setLayout('vertical')"><i class="portrait"></i><span>竖向<small>3 : 4</small></span></button><button :class="{ active: layout === 'horizontal' }" @click="setLayout('horizontal')"><i class="landscape"></i><span>横向<small>3 : 2</small></span></button></div></section>
       <section class="setting-group"><div class="section-label"><span>信息区背景</span></div><div class="segment compact"><button :class="{ active: cardInfoBackground === 'default' }" @click="setCardInfoBackground('default')">默认</button><button :class="{ active: cardInfoBackground === 'frosted' }" @click="setCardInfoBackground('frosted')">磨砂半透明</button></div></section>

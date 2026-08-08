@@ -31,7 +31,11 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .brand i { width: 8px; height: 8px; background: var(--accent); border-radius: 2px; transform: rotate(45deg) }
 .topbar-left { min-width: 0; display: flex; align-items: center; gap: 12px }
 .topbar-left .location { min-width: 0 }
-.nav-trigger { flex: 0 0 38px }
+.sidebar-trigger-slot { width: 40px; height: 40px; flex: 0 0 40px }
+.primary.sidebar-trigger { position: fixed; z-index: 23; top: 19px; width: 40px; height: 40px; min-height: 40px; padding: 0; border-radius: 9px }
+.sidebar-trigger svg { width: 18px }
+.left-trigger { left: 24px }
+.right-trigger { right: 24px }
 .header-actions { justify-self: end; display: flex; align-items: center; gap: 8px }
 .icon-button { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 9px; color: #a3adb8 }
 .icon-button:hover { color: var(--text); background: var(--surface-2); border-color: var(--line) }
@@ -99,14 +103,14 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .loader { width: 22px; height: 22px; border: 2px solid #2c3440; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite }
 @keyframes spin { to { transform: rotate(360deg) } }
 
-.scrim { position: fixed; inset: 0; z-index: 20; background: rgba(3,5,8,.72); opacity: 0; pointer-events: none; transition: opacity 180ms ease }
-.scrim.visible { opacity: 1; pointer-events: auto }
-.drawer { position: fixed; z-index: 21; top: 0; bottom: 0; width: min(410px, 92vw); display: flex; flex-direction: column; gap: 18px; padding: 24px; background: #101419; transition: transform 200ms ease; will-change: transform }
+.drawer { position: fixed; z-index: 21; top: 0; bottom: 0; width: min(410px, 92vw); display: flex; flex-direction: column; gap: 18px; padding: 24px; background: #101419; transition: transform 300ms ease }
 .drawer.left { left: 0; border-right: 1px solid var(--line); transform: translateX(-100%) }
 .drawer.right { right: 0; border-left: 1px solid var(--line); transform: translateX(100%) }
 .drawer.open { transform: none }
 .drawer-title { display: flex; align-items: center; justify-content: space-between; padding-bottom: 17px; border-bottom: 1px solid var(--line) }
 .drawer-title > div { display: flex; flex-direction: column; gap: 3px }
+.drawer.left .drawer-title { justify-content: flex-end; text-align: right }
+.drawer.left .drawer-title > div { align-items: flex-end }
 .drawer-title span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase }
 .drawer-title b { font-size: 21px; font-weight: 620 }
 .drawer-title > button { width: 32px; height: 32px; border-radius: 8px; color: var(--muted); font-size: 23px; font-weight: 300 }
@@ -200,8 +204,9 @@ textarea { min-height: 150px; padding: 12px; resize: vertical; line-height: 1.7;
   .title-row h1 { font-size: 18px }
   .title-row > span { display: none }
   .view-switch { display: none }
-  .add-button { width: 38px; padding: 0 }
-  .add-button span { display: none }
+  .sidebar-trigger { top: 12px; width: 40px; height: 40px }
+  .left-trigger { left: 10px }
+  .right-trigger { right: 10px }
   .workspace { padding: 10px 10px 40px }
   .gallery-panel { min-height: calc(100vh - 74px) }
   .album-grid { gap: 9px; padding: 10px }
