@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import TreeNode from './TreeNode.vue'
 
 const albums = ref([]), tree = ref([]), ancestors = ref([]), current = ref(null)
 const leftOpen = ref(false), rightOpen = ref(false), loading = ref(false)
@@ -8,6 +9,7 @@ const layout = ref(localStorage.getItem('myreader-layout') || 'vertical')
 const scanPaths = ref(''), recursive = ref(true), events = ref([])
 const menu = ref(null), coverDialog = ref(null), internalImages = ref([]), error = ref('')
 const fileInput = ref(null)
+const eventLabels = { info: '执行', ok: '完成', warn: '跳过', error: '错误' }
 
 const crumbs = computed(() => [...ancestors.value, ...(current.value ? [current.value] : [])])
 const thumb = album => `/api/albums/${album.id}/cover?${layout.value === 'vertical' ? 'width=300&height=400' : 'width=450&height=300'}&mode=cover&v=${album.cover_path || album.mtime}`
@@ -15,6 +17,10 @@ const formatSize = value => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; let n = Number(value), i = 0
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
   return `${i ? n.toFixed(n >= 10 ? 1 : 2) : n} ${units[i]}`
+}
+const logEvent = (type, text, front = false) => {
+  const item = { type, text, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) }
+  front ? events.value.unshift(item) : events.value.push(item)
 }
 
 async function api(url, options) {
@@ -55,9 +61,9 @@ async function refresh() {
   loading.value = true
   try {
     const result = await api('/api/refresh', { method: 'POST' })
-    events.value.unshift(`刷新完成：检查 ${result.checked}，移除 ${result.removed}`)
+    logEvent(result.removed ? 'warn' : 'ok', `刷新完成：检查 ${result.checked}，移除 ${result.removed}`, true)
     await loadAlbums(current.value?.id ?? null)
-  } catch (e) { error.value = e.message } finally { loading.value = false }
+  } catch (e) { error.value = e.message; logEvent('error', `刷新失败：${e.message}`, true) } finally { loading.value = false }
 }
 
 async function scan() {
@@ -77,11 +83,13 @@ async function scan() {
       const lines = buffer.split('\n'); buffer = lines.pop()
       for (const line of lines) if (line) {
         const event = JSON.parse(line)
-        events.value.push(event.type === 'started' ? `开始：${event.path}` : event.type === 'skipped' ? `跳过：${event.path}（${event.reason}）` : `完成：登记 ${event.registered}，跳过 ${event.skipped}`)
+        if (event.type === 'started') logEvent('info', event.path)
+        else if (event.type === 'skipped') logEvent('warn', `${event.path}（${event.reason}）`)
+        else logEvent('ok', `登记 ${event.registered}，跳过 ${event.skipped}`)
       }
     }
     scanPaths.value = ''; await loadAlbums(current.value?.id ?? null)
-  } catch (e) { error.value = e.message } finally { loading.value = false }
+  } catch (e) { error.value = e.message; logEvent('error', e.message) } finally { loading.value = false }
 }
 
 function showMenu(event, album) {
@@ -138,11 +146,16 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
 <template>
   <div class="app-shell">
     <header class="topbar">
-      <button class="icon-button nav-trigger" @click="leftOpen = true" title="打开目录" aria-label="打开目录">
-        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-      </button>
+      <div class="topbar-left">
+        <button class="icon-button nav-trigger" @click="leftOpen = true" title="打开目录" aria-label="打开目录"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+        <div class="location">
+          <nav class="breadcrumbs" aria-label="当前位置"><button @click="loadAlbums(null)">相册</button><template v-for="crumb in crumbs" :key="crumb.id"><span>›</span><button @click="loadAlbums(crumb.id)">{{ crumb.name }}</button></template></nav>
+          <div class="title-row"><button v-if="current" class="back" @click="goBack" title="返回上级" aria-label="返回上级"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg></button><h1>{{ current?.name || '全部相册' }}</h1><span>{{ albums.length }}</span></div>
+        </div>
+      </div>
       <div class="brand"><i></i><span>MYREADER</span></div>
       <div class="header-actions">
+        <div class="sort-control"><span>排序</span><label class="sort-select"><select v-model="sort"><option value="name">名称</option><option value="added_at">添加时间</option><option value="mtime">修改时间</option><option value="size">大小</option><option value="file_count">页数</option></select><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4" /></svg></label><button class="order" @click="order = order === 'asc' ? 'desc' : 'asc'" :title="order === 'asc' ? '升序' : '降序'"><svg viewBox="0 0 24 24"><path :d="order === 'asc' ? 'm8 7 4-4 4 4M12 3v18' : 'm8 17 4 4 4-4M12 3v18'" /></svg></button></div>
         <div class="view-switch" aria-label="封面布局">
           <button :class="{ active: layout === 'vertical' }" @click="setLayout('vertical')" title="竖向卡片" aria-label="竖向卡片"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2" /></svg></button>
           <button :class="{ active: layout === 'horizontal' }" @click="setLayout('horizontal')" title="横向卡片" aria-label="横向卡片"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /></svg></button>
@@ -154,16 +167,6 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
 
     <main class="workspace" :aria-busy="loading">
       <section class="gallery-panel">
-        <div class="panel-head">
-          <div class="location">
-            <nav class="breadcrumbs" aria-label="当前位置">
-              <button @click="loadAlbums(null)">相册</button>
-              <template v-for="crumb in crumbs" :key="crumb.id"><span>›</span><button @click="loadAlbums(crumb.id)">{{ crumb.name }}</button></template>
-            </nav>
-            <div class="title-row"><button v-if="current" class="back" @click="goBack" title="返回上级" aria-label="返回上级"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg></button><h1>{{ current?.name || '全部相册' }}</h1><span>{{ albums.length }}</span></div>
-          </div>
-          <div class="sort-control"><span>排序</span><select v-model="sort"><option value="name">名称</option><option value="added_at">添加时间</option><option value="mtime">修改时间</option><option value="size">大小</option><option value="file_count">页数</option></select><button class="order" @click="order = order === 'asc' ? 'desc' : 'asc'" :title="order === 'asc' ? '升序' : '降序'"><svg viewBox="0 0 24 24"><path :d="order === 'asc' ? 'm8 7 4-4 4 4M12 3v18' : 'm8 17 4 4 4-4M12 3v18'" /></svg></button></div>
-        </div>
         <p v-if="error" class="error" @click="error = ''"><span>{{ error }}</span><b>×</b></p>
         <div v-if="loading && !albums.length" class="empty"><i class="loader"></i><b>正在整理相册</b></div>
         <div v-else-if="!albums.length" class="empty"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3z" /></svg></div><b>这里还没有相册</b><span>添加本地文件夹或 ZIP，封面会自动生成。</span><button class="primary" @click="rightOpen = true">添加路径</button></div>
@@ -182,7 +185,7 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
       <div class="search-wrap"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input v-model="query" class="search" placeholder="搜索名称或路径" /></div>
       <div class="section-label"><span>目录树</span><em>{{ tree.length }}</em></div>
       <div class="tree"><TreeNode v-for="node in tree" :key="node.album.id" :node="node" :current-id="current?.id" :expand-all="!!query" @enter="album => { enter(album); leftOpen = false }" @menu="showMenu" /><p v-if="!tree.length" class="muted">没有匹配的相册</p></div>
-      <div class="events"><div class="section-label"><span>任务记录</span><em>{{ events.length }}</em></div><p v-if="!events.length" class="muted">暂无扫描事件</p><p v-for="(event, i) in events" :key="i"><i></i>{{ event }}</p></div>
+      <section class="task-section"><div class="section-label"><span>任务记录</span><em>{{ events.length }}</em></div><div class="task-log"><p v-if="!events.length" class="muted"><time>--:--:--</time><b>等待</b><span>暂无任务</span></p><p v-for="(event, i) in events" :key="i" :class="event.type"><time>{{ event.time }}</time><b>{{ eventLabels[event.type] }}</b><span>{{ event.text }}</span></p></div></section>
     </aside>
     <aside class="drawer right" :class="{ open: rightOpen }">
       <div class="drawer-title"><div><span>管理</span><b>添加与设置</b></div><button @click="rightOpen = false" aria-label="关闭">×</button></div>
@@ -200,14 +203,3 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
     <input ref="fileInput" hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="uploadCover" />
   </div>
 </template>
-
-<script>
-const TreeNode = {
-  name: 'TreeNode', props: { node: Object, currentId: Number, depth: { type: Number, default: 0 }, expandAll: Boolean }, emits: ['enter', 'menu'],
-  data: () => ({ open: false }),
-  methods: { contains(id, node = this.node) { return node.album.id === id || node.children.some(child => this.contains(id, child)) }, sync() { if (this.expandAll || this.depth === 0 || this.contains(this.currentId)) this.open = true } },
-  created() { this.sync() }, watch: { currentId() { this.sync() }, expandAll() { this.sync() } },
-  template: `<div class="tree-node"><div class="tree-row" :class="{current: node.album.id === currentId}" @dblclick="$emit('enter', node.album)" @contextmenu.prevent="$emit('menu', $event, node.album)"><button v-if="node.children.length" @click.stop="open=!open">{{open?'−':'+'}}</button><i v-else></i><span class="tree-kind" :class="node.album.type">{{node.album.type==='zip'?'Z':'F'}}</span><label :title="node.path">{{node.album.name}}</label><small>{{node.album.file_count}}</small></div><div v-if="open" class="tree-children"><TreeNode v-for="child in node.children" :key="child.album.id" :node="child" :current-id="currentId" :depth="depth+1" :expand-all="expandAll" @enter="$emit('enter',$event)" @menu="(...args)=>$emit('menu',...args)" /></div></div>`
-}
-export default { components: { TreeNode } }
-</script>

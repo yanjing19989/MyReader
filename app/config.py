@@ -9,7 +9,7 @@ CACHE_DIR = Path(os.getenv("MYREADER_CACHE_DIR", DATA_DIR / "cache")).expanduser
 THUMB_DIR = CACHE_DIR / "thumbs"
 UPLOAD_DIR = DATA_DIR / "covers"
 VIEWER_PATH = Path(
-    os.getenv("MYREADER_VIEWER_PATH", r"C:\Program Files\BandiView\BandiView.exe")
+    os.getenv("MYREADER_VIEWER_PATH", r"D:\myprogram\BandiView\BandiView.exe")
 ).expanduser()
 
 
