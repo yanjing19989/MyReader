@@ -6,13 +6,14 @@ const albums = ref([]), tree = ref([]), ancestors = ref([]), current = ref(null)
 const leftOpen = ref(false), rightOpen = ref(false), loading = ref(false)
 const query = ref(''), sort = ref('name'), order = ref('asc')
 const layout = ref(localStorage.getItem('myreader-layout') || 'vertical')
+const cardInfoBackground = ref(localStorage.getItem('myreader-card-info-background') || 'default')
 const scanPaths = ref(''), recursive = ref(true), events = ref([])
-const menu = ref(null), coverDialog = ref(null), internalImages = ref([]), error = ref('')
+const menu = ref(null), coverDialog = ref(null), coverOptions = ref({ items: [], albums: [] }), error = ref('')
 const fileInput = ref(null)
 const eventLabels = { info: '执行', ok: '完成', warn: '跳过', error: '错误' }
 
 const crumbs = computed(() => [...ancestors.value, ...(current.value ? [current.value] : [])])
-const thumb = album => `/api/albums/${album.id}/cover?${layout.value === 'vertical' ? 'width=300&height=400' : 'width=450&height=300'}&mode=cover&v=${album.cover_path || album.mtime}`
+const thumb = album => `/api/albums/${album.id}/cover?${layout.value === 'vertical' ? 'width=300&height=400' : 'width=450&height=300'}&mode=cover&v=${album.cover_version}`
 const formatSize = value => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; let n = Number(value), i = 0
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
@@ -50,6 +51,7 @@ async function loadAlbums(parentId = current.value?.id ?? null) {
 function enter(album) { if (album.type === 'folder') loadAlbums(album.id) }
 function goBack() { loadAlbums(ancestors.value.at(-1)?.id ?? null) }
 function setLayout(value) { layout.value = value; localStorage.setItem('myreader-layout', value) }
+function setCardInfoBackground(value) { cardInfoBackground.value = value; localStorage.setItem('myreader-card-info-background', value) }
 
 async function initialize() {
   loading.value = true
@@ -112,13 +114,20 @@ async function defaultCover(album) {
 
 async function chooseInternal(album) {
   menu.value = null
-  try { internalImages.value = (await api(`/api/albums/${album.id}/images`)).items; coverDialog.value = album }
+  try { coverOptions.value = await api(`/api/albums/${album.id}/images`); coverDialog.value = album }
   catch (e) { error.value = e.message }
 }
 
 async function setInternal(entry) {
   try {
     await api(`/api/albums/${coverDialog.value.id}/cover`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'internal', entry }) })
+    coverDialog.value = null; await loadAlbums(current.value?.id ?? null)
+  } catch (e) { error.value = e.message }
+}
+
+async function setChildAlbumCover(album) {
+  try {
+    await api(`/api/albums/${coverDialog.value.id}/cover`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'album', source_album_id: album.id }) })
     coverDialog.value = null; await loadAlbums(current.value?.id ?? null)
   } catch (e) { error.value = e.message }
 }
@@ -161,7 +170,7 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
           <button :class="{ active: layout === 'horizontal' }" @click="setLayout('horizontal')" title="横向卡片" aria-label="横向卡片"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /></svg></button>
         </div>
         <button class="icon-button" :class="{ spinning: loading }" @click="refresh" title="刷新相册" aria-label="刷新相册"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.4 9A7 7 0 0 0 6.8 6.4L4 11m16 2-2.8 4.6A7 7 0 0 1 5.6 15" /></svg></button>
-        <button class="primary add-button" @click="rightOpen = true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg><span>添加相册</span></button>
+        <button class="primary add-button" @click="rightOpen = true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg><span>添加/设置</span></button>
       </div>
     </header>
 
@@ -170,7 +179,7 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
         <p v-if="error" class="error" @click="error = ''"><span>{{ error }}</span><b>×</b></p>
         <div v-if="loading && !albums.length" class="empty"><i class="loader"></i><b>正在整理相册</b></div>
         <div v-else-if="!albums.length" class="empty"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3z" /></svg></div><b>这里还没有相册</b><span>添加本地文件夹或 ZIP，封面会自动生成。</span><button class="primary" @click="rightOpen = true">添加路径</button></div>
-        <section v-else class="album-grid" :class="layout">
+        <section v-else class="album-grid" :class="[layout, { frosted: cardInfoBackground === 'frosted' }]">
           <article v-for="album in albums" :key="album.id" class="album-card" :class="{ folder: album.type === 'folder' }" @click="enter(album)" @dblclick.stop="openViewer(album)" @contextmenu="showMenu($event, album)">
             <div class="cover"><div class="cover-placeholder"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3z" /></svg></div><img :src="thumb(album)" :alt="album.name" loading="lazy" decoding="async" @error="$event.target.remove()" /><span class="type" :class="album.type">{{ album.type === 'zip' ? 'ZIP' : '目录' }}</span></div>
             <div class="card-info"><h2 :title="album.name">{{ album.name }}</h2><p><span>{{ album.file_count.toLocaleString('zh-CN') }} 页</span><i></i><span>{{ formatSize(album.size) }}</span></p></div>
@@ -191,6 +200,7 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
       <div class="drawer-title"><div><span>管理</span><b>添加与设置</b></div><button @click="rightOpen = false" aria-label="关闭">×</button></div>
       <section class="setting-group"><div class="section-label"><span>扫描路径</span><em>每行一个</em></div><textarea v-model="scanPaths" rows="8" spellcheck="false" placeholder="D:/Pictures&#10;D:/Albums/books.zip"></textarea><label class="check"><input v-model="recursive" type="checkbox" /><i></i><span>递归扫描子目录</span></label><button class="primary wide" :disabled="loading || !scanPaths.trim()" @click="scan"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>{{ loading ? '正在处理' : '添加并扫描' }}</button></section>
       <section class="setting-group"><div class="section-label"><span>封面比例</span></div><div class="segment"><button :class="{ active: layout === 'vertical' }" @click="setLayout('vertical')"><i class="portrait"></i><span>竖向<small>3 : 4</small></span></button><button :class="{ active: layout === 'horizontal' }" @click="setLayout('horizontal')"><i class="landscape"></i><span>横向<small>3 : 2</small></span></button></div></section>
+      <section class="setting-group"><div class="section-label"><span>信息区背景</span></div><div class="segment compact"><button :class="{ active: cardInfoBackground === 'default' }" @click="setCardInfoBackground('default')">默认</button><button :class="{ active: cardInfoBackground === 'frosted' }" @click="setCardInfoBackground('frosted')">磨砂半透明</button></div></section>
     </aside>
 
     <div v-if="menu" class="context-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }">
@@ -199,7 +209,7 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
       <button @click="chooseInternal(menu.album)">选择内部封面</button>
       <button @click="chooseUpload(menu.album)">上传封面</button>
     </div>
-    <div v-if="coverDialog && !coverDialog.upload" class="modal-wrap" @click.self="coverDialog = null"><div class="modal"><div class="drawer-title"><b>选择内部封面</b><button @click="coverDialog = null">×</button></div><div class="image-list"><button v-for="entry in internalImages" :key="entry" @click="setInternal(entry)">{{ entry }}</button><p v-if="!internalImages.length">此相册没有直接图片。</p></div></div></div>
+    <div v-if="coverDialog && !coverDialog.upload" class="modal-wrap" @click.self="coverDialog = null"><div class="modal"><div class="drawer-title"><b>选择内部封面</b><button @click="coverDialog = null">×</button></div><div class="image-list"><p v-if="coverOptions.items.length" class="option-label">本相册图片</p><button v-for="entry in coverOptions.items" :key="entry" @click="setInternal(entry)">{{ entry }}</button><p v-if="coverOptions.albums.length" class="option-label">下级相册封面</p><button v-for="album in coverOptions.albums" :key="album.id" class="album-option" @click="setChildAlbumCover(album)"><img :src="thumb(album)" :alt="album.name" /><span>{{ album.name }}</span><small>{{ album.file_count }} 页</small></button><p v-if="!coverOptions.items.length && !coverOptions.albums.length">此相册没有可选封面。</p></div></div></div>
     <input ref="fileInput" hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="uploadCover" />
   </div>
 </template>

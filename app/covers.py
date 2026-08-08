@@ -18,7 +18,6 @@ class CoverSource:
     container: str
     entry: str | None
     display: str
-    signature: str
 
 
 def get_album(album_id: int):
@@ -43,15 +42,32 @@ def image_entries(row) -> list[str]:
         return []
 
 
+def child_albums(row) -> list[dict]:
+    parent_key = path_key(row["path"])
+    prefix = parent_key + "/"
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM albums WHERE type = 'folder'").fetchall()
+    children = []
+    for candidate in rows:
+        candidate_key = path_key(candidate["path"])
+        if not candidate_key.startswith(prefix):
+            continue
+        has_registered_parent = any(
+            other["id"] != candidate["id"]
+            and candidate_key.startswith(path_key(other["path"]) + "/")
+            and path_key(other["path"]).startswith(prefix)
+            for other in rows
+        )
+        if not has_registered_parent:
+            children.append(candidate)
+    return sorted(children, key=lambda item: natural_key(item["name"]))
+
+
 def _file_source(path: Path, display: str | None = None) -> CoverSource | None:
     try:
-        stat = path.stat()
         if not path.is_file() or not is_image(path.name):
             return None
-        return CoverSource(
-            "file", str(path), None, display or normalize_path(path),
-            f"file:{normalize_path(path)}:{stat.st_mtime_ns}:{stat.st_size}",
-        )
+        return CoverSource("file", str(path), None, display or normalize_path(path))
     except OSError:
         return None
 
@@ -59,42 +75,53 @@ def _file_source(path: Path, display: str | None = None) -> CoverSource | None:
 def _zip_source(path: Path, entry: str) -> CoverSource | None:
     try:
         with zipfile.ZipFile(path) as archive:
-            info = archive.getinfo(entry)
-        stat = path.stat()
+            archive.getinfo(entry)
         display = f"{normalize_path(path)}!/{entry}"
-        return CoverSource(
-            "zip", str(path), entry, display,
-            f"zip:{normalize_path(path)}:{stat.st_mtime_ns}:{stat.st_size}:{entry}:{info.CRC}",
-        )
+        return CoverSource("zip", str(path), entry, display)
     except (OSError, KeyError, zipfile.BadZipFile, RuntimeError):
         return None
 
 
-def _direct_source(row) -> CoverSource | None:
+def _source_for(row, seen: set[int] | None = None) -> CoverSource | None:
+    seen = set() if seen is None else seen
+    if row["id"] in seen:
+        return None
+    seen.add(row["id"])
     if row["cover_kind"] == "upload" and row["cover_ref"]:
         return _file_source(Path(row["cover_ref"]), row["cover_ref"])
+    if row["cover_kind"] == "album" and row["cover_ref"]:
+        try:
+            child = get_album(int(row["cover_ref"]))
+        except ValueError:
+            child = None
+        if child and any(item["id"] == child["id"] for item in child_albums(row)):
+            source = _source_for(child, seen)
+            if source:
+                return source
     entries = image_entries(row)
     entry = row["cover_ref"] if row["cover_kind"] == "internal" else (entries[0] if entries else None)
-    if not entry or entry not in entries:
+    if entry and entry in entries:
+        container = Path(row["path"])
+        source = _file_source(container / entry) if row["type"] == "folder" else _zip_source(container, entry)
+        if source:
+            return source
+    if row["type"] != "folder":
         return None
-    container = Path(row["path"])
-    return _file_source(container / entry) if row["type"] == "folder" else _zip_source(container, entry)
+    prefix = path_key(row["path"]) + "/"
+    with connect() as conn:
+        descendants = [
+            item for item in conn.execute("SELECT * FROM albums").fetchall()
+            if path_key(item["path"]).startswith(prefix)
+        ]
+    descendants.sort(key=lambda item: natural_key(item["path"]))
+    return next((source for item in descendants if (source := _source_for(item, seen.copy()))), None)
 
 
 def resolve_cover(album_id: int) -> CoverSource | None:
     row = get_album(album_id)
     if not row:
         return None
-    source = _direct_source(row)
-    if not source and row["type"] == "folder":
-        prefix = path_key(row["path"]) + "/"
-        with connect() as conn:
-            descendants = [
-                item for item in conn.execute("SELECT * FROM albums").fetchall()
-                if path_key(item["path"]).startswith(prefix)
-            ]
-        descendants.sort(key=lambda item: natural_key(item["path"]))
-        source = next((candidate for item in descendants if (candidate := _direct_source(item))), None)
+    source = _source_for(row)
     if source:
         with connect() as conn:
             conn.execute("UPDATE albums SET cover_path = ? WHERE id = ?", (source.display, album_id))
@@ -113,20 +140,20 @@ def _load(source: CoverSource) -> Image.Image:
 
 
 def make_thumbnail(album_id: int, width: int, height: int, mode: str, quality: int) -> Path | None:
-    source = resolve_cover(album_id)
-    if not source:
+    row = get_album(album_id)
+    if not row:
         return None
-    raw_key = f"{album_id}|{source.signature}|{width}|{height}|{mode}|{quality}"
+    # Album mtime and cover_version are the invalidation contract. A hit must not inspect the source.
+    raw_key = f"{album_id}|{row['mtime']}|{row['cover_version']}|{width}|{height}|{mode}|{quality}"
     cache_key = hashlib.sha256(raw_key.encode()).hexdigest()
     output = THUMB_DIR / f"{cache_key}.webp"
     with connect() as conn:
         hit = conn.execute("SELECT file_path FROM thumbs WHERE cache_key = ?", (cache_key,)).fetchone()
         if hit and Path(hit["file_path"]).is_file():
-            conn.execute(
-                "UPDATE thumbs SET last_accessed=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE cache_key=?",
-                (cache_key,),
-            )
             return Path(hit["file_path"])
+    source = resolve_cover(album_id)
+    if not source:
+        return None
     try:
         image = _load(source)
         background = Image.new("RGB", image.size, "white")
@@ -142,23 +169,30 @@ def make_thumbnail(album_id: int, width: int, height: int, mode: str, quality: i
         return None
     with connect() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO thumbs(album_id,cache_key,file_path,source_sig) VALUES(?,?,?,?)",
-            (album_id, cache_key, str(output), source.signature),
+            "INSERT OR REPLACE INTO thumbs(album_id,cache_key,file_path,source_mtime) VALUES(?,?,?,?)",
+            (album_id, cache_key, str(output), row["mtime"]),
         )
     return output
 
 
-def set_cover(album_id: int, kind: str, entry: str | None = None) -> bool:
+def set_cover(
+    album_id: int, kind: str, entry: str | None = None, source_album_id: int | None = None
+) -> bool:
     row = get_album(album_id)
     if not row:
         return False
     old_upload = row["cover_ref"] if row["cover_kind"] == "upload" else None
     if kind == "internal" and (not entry or entry not in image_entries(row)):
         raise ValueError("封面条目不存在")
+    if kind == "album" and (
+        source_album_id is None or not any(item["id"] == source_album_id for item in child_albums(row))
+    ):
+        raise ValueError("下级相册不存在")
+    cover_ref = entry if kind == "internal" else str(source_album_id) if kind == "album" else None
     with connect() as conn:
         conn.execute(
-            "UPDATE albums SET cover_kind=?,cover_ref=?,cover_path=NULL WHERE id=?",
-            (kind, entry if kind == "internal" else None, album_id),
+            "UPDATE albums SET cover_kind=?,cover_ref=?,cover_path=NULL,cover_version=cover_version+1 WHERE id=?",
+            (kind, cover_ref, album_id),
         )
         invalidate_thumbs(conn, album_id)
     if old_upload:

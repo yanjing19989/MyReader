@@ -16,7 +16,7 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 from .config import UPLOAD_DIR, VIEWER_PATH
-from .covers import get_album, image_entries, make_thumbnail, set_cover
+from .covers import child_albums, get_album, image_entries, make_thumbnail, set_cover
 from .db import album_dict, connect, init_db, invalidate_thumbs, path_key
 from .scanner import natural_key, normalize_path, refresh_all, scan_paths
 
@@ -43,8 +43,9 @@ class ScanRequest(BaseModel):
 
 
 class CoverRequest(BaseModel):
-    kind: Literal["default", "internal"]
+    kind: Literal["default", "internal", "album"]
     entry: str | None = None
+    source_album_id: int | None = None
 
 
 class ViewerRequest(BaseModel):
@@ -158,7 +159,14 @@ def album_images(album_id: int):
     row = get_album(album_id)
     if not row:
         raise HTTPException(404, "相册不存在")
-    return {"items": image_entries(row)}
+    return {
+        "items": image_entries(row),
+        "albums": [
+            {"id": item["id"], "name": item["name"], "file_count": item["file_count"],
+             "cover_version": item["cover_version"]}
+            for item in child_albums(row)
+        ],
+    }
 
 
 @app.get("/api/albums/{album_id}/cover")
@@ -172,13 +180,17 @@ async def album_cover(
     output = await asyncio.to_thread(make_thumbnail, album_id, width, height, mode, quality)
     if not output:
         raise HTTPException(404, "没有可用封面")
-    return FileResponse(output, media_type="image/webp", headers={"Cache-Control": "no-cache"})
+    return FileResponse(
+        output,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.put("/api/albums/{album_id}/cover")
 def update_cover(album_id: int, request: CoverRequest):
     try:
-        if not set_cover(album_id, request.kind, request.entry):
+        if not set_cover(album_id, request.kind, request.entry, request.source_album_id):
             raise HTTPException(404, "相册不存在")
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -206,7 +218,8 @@ async def upload_cover(album_id: int, file: UploadFile = File(...)):
     old_upload = row["cover_ref"] if row["cover_kind"] == "upload" else None
     with connect() as conn:
         conn.execute(
-            "UPDATE albums SET cover_kind='upload',cover_ref=?,cover_path=NULL WHERE id=?",
+            "UPDATE albums SET cover_kind='upload',cover_ref=?,cover_path=NULL,"
+            "cover_version=cover_version+1 WHERE id=?",
             (str(output), album_id),
         )
         invalidate_thumbs(conn, album_id)

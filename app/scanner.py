@@ -42,8 +42,10 @@ def _upsert(kind: str, path: Path, count: int, size: int) -> tuple[int, bool]:
             aggregate_changed = old["file_count"] != count or old["size"] != size
             conn.execute(
                 "UPDATE albums SET type=?, path=?, name=?, mtime=?, size=?, file_count=?, "
-                "cover_path=CASE WHEN ? THEN NULL ELSE cover_path END WHERE id=?",
-                (kind, normalized, name, mtime, size, count, changed, old["id"]),
+                "cover_path=CASE WHEN ? THEN NULL ELSE cover_path END, "
+                "cover_version=cover_version+CASE WHEN ? THEN 1 ELSE 0 END WHERE id=?",
+                (kind, normalized, name, mtime, size, count, changed or aggregate_changed,
+                 changed or aggregate_changed, old["id"]),
             )
             if changed or aggregate_changed:
                 invalidate_thumbs(conn, old["id"])

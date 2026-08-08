@@ -6,7 +6,7 @@ from pathlib import Path
 from .config import DB_PATH, ensure_dirs
 
 
-PUBLIC_FIELDS = "id, type, path, name, mtime, size, file_count, added_at, cover_path"
+PUBLIC_FIELDS = "id, type, path, name, mtime, size, file_count, added_at, cover_path, cover_version"
 
 
 @contextmanager
@@ -42,7 +42,8 @@ def init_db() -> None:
                 added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 cover_kind TEXT NOT NULL DEFAULT 'default',
                 cover_ref TEXT,
-                cover_path TEXT
+                cover_path TEXT,
+                cover_version INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_albums_path ON albums(path);
             CREATE TABLE IF NOT EXISTS thumbs (
@@ -50,8 +51,7 @@ def init_db() -> None:
                 album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
                 cache_key TEXT NOT NULL UNIQUE,
                 file_path TEXT NOT NULL,
-                source_sig TEXT NOT NULL,
-                last_accessed TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                source_mtime INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_thumbs_album ON thumbs(album_id);
             """

@@ -27,7 +27,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 
 .app-shell { min-height: 100vh }
 .topbar { min-height: 78px; position: sticky; top: 0; z-index: 8; display: grid; grid-template-columns: minmax(280px, 1fr) auto minmax(520px, 1fr); align-items: center; gap: 20px; padding: 9px 24px; background: #0d1116; border-bottom: 1px solid #1d232b }
-.brand { grid-column: 2; display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 750; letter-spacing: .18em }
+.brand { grid-column: 2; display: flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 750; letter-spacing: .18em }
 .brand i { width: 8px; height: 8px; background: var(--accent); border-radius: 2px; transform: rotate(45deg) }
 .topbar-left { min-width: 0; display: flex; align-items: center; gap: 12px }
 .topbar-left .location { min-width: 0 }
@@ -39,7 +39,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .view-switch button { width: 31px; height: 30px; display: grid; place-items: center; color: #68727e; border-radius: 6px }
 .view-switch button.active { color: var(--accent-strong); background: var(--surface-3) }
 .view-switch svg { width: 17px }
-.primary { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border-radius: 9px; color: #0d1220; background: var(--accent); font-size: 14px; font-weight: 700 }
+.primary { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border-radius: 9px; color: #0d1220; background: var(--accent); font-size: 16px; font-weight: 700 }
 .primary:hover { background: var(--accent-strong) }
 .primary:disabled { opacity: .42; cursor: not-allowed }
 .primary svg { width: 17px }
@@ -86,7 +86,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .card-info h2 { margin: 0; overflow: hidden; color: #f2f4f7; white-space: nowrap; text-overflow: ellipsis; font-size: 15px; font-weight: 620 }
 .card-info p { display: flex; align-items: center; gap: 7px; margin: 6px 0 0; color: #9da6b0; font-size: 11px; font-weight: 600 }
 .card-info p i { width: 2px; height: 2px; border-radius: 50%; background: #626b75 }
-.horizontal .card-info { padding-top: 38px }
+.album-grid.frosted .card-info { border-top: 1px solid rgba(255,255,255,.12); background: rgba(11,15,20,.7); backdrop-filter: blur(5px)}
 
 .error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 11px 13px; border: 1px solid #613138; border-radius: 8px; background: #28171b; color: #f0a7aa; font-size: 14px; cursor: pointer }
 .error b { font-size: 16px }
@@ -155,6 +155,7 @@ textarea { min-height: 150px; padding: 12px; resize: vertical; line-height: 1.7;
 .segment .landscape { width: 25px; height: 17px }
 .segment button span { display: flex; flex-direction: column; align-items: flex-start; font-size: 13px }
 .segment button small { margin-top: 2px; color: #687380; font-size: 11px }
+.segment.compact button { height: 42px; font-size: 13px }
 
 .context-menu { position: fixed; z-index: 40; width: 214px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 10px; background: #161b21; box-shadow: 0 16px 40px rgba(0,0,0,.45) }
 .context-menu small { display: block; padding: 7px 9px 8px; overflow: hidden; color: #78838e; white-space: nowrap; text-overflow: ellipsis; font-size: 11px }
@@ -166,6 +167,12 @@ textarea { min-height: 150px; padding: 12px; resize: vertical; line-height: 1.7;
 .image-list { max-height: 50vh; overflow: auto; margin-top: 12px }
 .image-list button { display: block; width: 100%; padding: 11px; overflow: hidden; border-bottom: 1px solid var(--line); color: #acb5be; white-space: nowrap; text-align: left; text-overflow: ellipsis; font-size: 14px }
 .image-list button:hover { color: var(--accent-strong); background: var(--surface-2) }
+.option-label { margin: 14px 0 5px; color: var(--muted); font-size: 12px }
+.image-list .option-label:first-child { margin-top: 0 }
+.image-list .album-option { display: flex; align-items: center; gap: 10px; min-height: 54px }
+.album-option img { width: 46px; height: 38px; border-radius: 4px; background: #0c1015; object-fit: cover }
+.album-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.album-option small { margin-left: auto; color: var(--muted); white-space: nowrap }
 
 * { scrollbar-color: #303944 transparent; scrollbar-width: thin }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation-duration: .01ms !important } }
