@@ -1,0 +1,18 @@
+[project]
+name = "myreader"
+version = "0.1.0"
+description = "Local album directory and cover browser"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "pillow>=11,<13",
+  "python-multipart>=0.0.20,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
+
