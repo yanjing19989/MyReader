@@ -11,13 +11,14 @@ from typing import Literal
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 from .config import UPLOAD_DIR, VIEWER_PATH
 from .covers import get_album, image_entries, make_thumbnail, set_cover
 from .db import album_dict, connect, init_db, invalidate_thumbs, path_key
-from .scanner import is_image, natural_key, normalize_path, refresh_all, scan_paths
+from .scanner import natural_key, normalize_path, refresh_all, scan_paths
 
 
 @asynccontextmanager
@@ -72,13 +73,11 @@ def _tree(rows, parents, query: str):
         group.sort(key=lambda item: natural_key(item["name"]))
 
     def build(row):
-        children = [build(child) for child in by_parent.get(row["id"], [])]
+        children = [node for child in by_parent.get(row["id"], []) if (node := build(child))]
         node = {"album": album_dict(row), "path": row["path"], "children": children}
         if not query or query in row["name"].casefold():
             return node
-        kept = [child for child in children if child]
-        if kept:
-            node["children"] = kept
+        if children:
             return node
         return None
 
@@ -245,3 +244,8 @@ def open_viewer(request: ViewerRequest):
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
