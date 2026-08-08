@@ -128,6 +128,20 @@ def resolve_cover(album_id: int) -> CoverSource | None:
     return source
 
 
+def original_cover(album_id: int) -> tuple[str, Path | bytes] | None:
+    source = resolve_cover(album_id)
+    if not source:
+        return None
+    try:
+        if source.kind == "zip":
+            with zipfile.ZipFile(source.container) as archive:
+                return source.entry or "cover", archive.read(source.entry)
+        path = Path(source.container)
+        return path.name, path
+    except (OSError, KeyError, zipfile.BadZipFile, RuntimeError):
+        return None
+
+
 def _load(source: CoverSource) -> Image.Image:
     if source.kind == "zip":
         with zipfile.ZipFile(source.container) as archive:

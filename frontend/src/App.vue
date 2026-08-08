@@ -9,11 +9,13 @@ const layout = ref(localStorage.getItem('myreader-layout') || 'vertical')
 const cardInfoBackground = ref(localStorage.getItem('myreader-card-info-background') || 'default')
 const scanPaths = ref(''), recursive = ref(true), events = ref([])
 const menu = ref(null), coverDialog = ref(null), coverOptions = ref({ items: [], albums: [] }), error = ref('')
+const preview = ref(null)
 const fileInput = ref(null)
 const eventLabels = { info: '执行', ok: '完成', warn: '跳过', error: '错误' }
 
 const crumbs = computed(() => [...ancestors.value, ...(current.value ? [current.value] : [])])
 const thumb = album => `/api/albums/${album.id}/cover?${layout.value === 'vertical' ? 'width=300&height=400' : 'width=450&height=300'}&mode=cover&v=${album.cover_version}`
+const originalCover = album => `/api/albums/${album.id}/cover/original?v=${album.cover_version}`
 const formatSize = value => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; let n = Number(value), i = 0
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
@@ -51,6 +53,21 @@ async function loadAlbums(parentId = current.value?.id ?? null) {
 function enter(album) { if (album.type === 'folder') loadAlbums(album.id) }
 function goBack() { loadAlbums(ancestors.value.at(-1)?.id ?? null) }
 function setLayout(value) { layout.value = value; localStorage.setItem('myreader-layout', value) }
+
+let clickTimer
+function previewAlbum(album) {
+  clearTimeout(clickTimer)
+  clickTimer = setTimeout(() => { menu.value = null; preview.value = album }, 260)
+}
+function activateAlbum(album) {
+  clearTimeout(clickTimer); preview.value = null
+  album.type === 'folder' ? enter(album) : openViewer(album)
+}
+function movePreview(step) {
+  const index = albums.value.findIndex(album => album.id === preview.value?.id)
+  if (index < 0 || albums.value.length < 2) return
+  preview.value = albums.value[(index + step + albums.value.length) % albums.value.length]
+}
 function setCardInfoBackground(value) { cardInfoBackground.value = value; localStorage.setItem('myreader-card-info-background', value) }
 
 async function initialize() {
@@ -142,14 +159,19 @@ async function uploadCover(event) {
   } catch (e) { error.value = e.message } finally { event.target.value = '' }
 }
 
-function escape() { leftOpen.value = false; rightOpen.value = false; menu.value = null; coverDialog.value = null }
+function escape() { leftOpen.value = false; rightOpen.value = false; menu.value = null; coverDialog.value = null; preview.value = null }
 function closeFloating(event) { if (!event.target.closest('.context-menu')) menu.value = null }
-function onKeydown(event) { if (event.key === 'Escape') escape() }
+function onKeydown(event) {
+  if (preview.value && event.key === 'ArrowLeft') { event.preventDefault(); movePreview(-1) }
+  else if (preview.value && event.key === 'ArrowRight') { event.preventDefault(); movePreview(1) }
+  else if (preview.value && event.key === 'Enter') { event.preventDefault(); activateAlbum(preview.value) }
+  else if (event.key === 'Escape') escape()
+}
 let searchTimer
 watch(query, () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => loadAlbums(current.value?.id ?? null), 220) })
 watch([sort, order], () => loadAlbums(current.value?.id ?? null))
 onMounted(() => { window.addEventListener('keydown', onKeydown); window.addEventListener('click', closeFloating); initialize() })
-onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('keydown', onKeydown); window.removeEventListener('click', closeFloating) })
+onBeforeUnmount(() => { clearTimeout(searchTimer); clearTimeout(clickTimer); window.removeEventListener('keydown', onKeydown); window.removeEventListener('click', closeFloating) })
 </script>
 
 <template>
@@ -180,7 +202,7 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
         <div v-if="loading && !albums.length" class="empty"><i class="loader"></i><b>正在整理相册</b></div>
         <div v-else-if="!albums.length" class="empty"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3z" /></svg></div><b>这里还没有相册</b><span>添加本地文件夹或 ZIP，封面会自动生成。</span><button class="primary" @click="rightOpen = true">添加路径</button></div>
         <section v-else class="album-grid" :class="[layout, { frosted: cardInfoBackground === 'frosted' }]">
-          <article v-for="album in albums" :key="album.id" class="album-card" :class="{ folder: album.type === 'folder' }" @click="enter(album)" @dblclick.stop="openViewer(album)" @contextmenu="showMenu($event, album)">
+          <article v-for="album in albums" :key="album.id" class="album-card" :class="{ folder: album.type === 'folder' }" @click="previewAlbum(album)" @dblclick.stop.prevent="activateAlbum(album)" @contextmenu="showMenu($event, album)">
             <div class="cover"><div class="cover-placeholder"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10H3z" /></svg></div><img :src="thumb(album)" :alt="album.name" loading="lazy" decoding="async" @error="$event.target.remove()" /><span class="type" :class="album.type">{{ album.type === 'zip' ? 'ZIP' : '目录' }}</span></div>
             <div class="card-info"><h2 :title="album.name">{{ album.name }}</h2><p><span>{{ album.file_count.toLocaleString('zh-CN') }} 页</span><i></i><span>{{ formatSize(album.size) }}</span></p></div>
           </article>
@@ -208,6 +230,12 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); window.removeEventListener('k
       <button @click="defaultCover(menu.album)">使用默认封面</button>
       <button @click="chooseInternal(menu.album)">选择内部封面</button>
       <button @click="chooseUpload(menu.album)">上传封面</button>
+    </div>
+    <div v-if="preview" class="cover-preview" @click.self="preview = null">
+      <div class="preview-title">{{ preview.name }}</div>
+      <button v-if="albums.length > 1" class="preview-nav previous" @click="movePreview(-1)" title="上一张" aria-label="上一张"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg></button>
+      <img :key="preview.id" :src="originalCover(preview)" :alt="preview.name" />
+      <button v-if="albums.length > 1" class="preview-nav next" @click="movePreview(1)" title="下一张" aria-label="下一张"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg></button>
     </div>
     <div v-if="coverDialog && !coverDialog.upload" class="modal-wrap" @click.self="coverDialog = null"><div class="modal"><div class="drawer-title"><b>选择内部封面</b><button @click="coverDialog = null">×</button></div><div class="image-list"><p v-if="coverOptions.items.length" class="option-label">本相册图片</p><button v-for="entry in coverOptions.items" :key="entry" @click="setInternal(entry)">{{ entry }}</button><p v-if="coverOptions.albums.length" class="option-label">下级相册封面</p><button v-for="album in coverOptions.albums" :key="album.id" class="album-option" @click="setChildAlbumCover(album)"><img :src="thumb(album)" :alt="album.name" /><span>{{ album.name }}</span><small>{{ album.file_count }} 页</small></button><p v-if="!coverOptions.items.length && !coverOptions.albums.length">此相册没有可选封面。</p></div></div></div>
     <input ref="fileInput" hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="uploadCover" />

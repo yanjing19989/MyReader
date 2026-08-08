@@ -70,7 +70,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .album-grid { display: grid; gap: 15px; padding: 0 }
 .album-grid.vertical { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)) }
 .album-grid.horizontal { grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)) }
-.album-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid #242b34; border-radius: 11px; background: #0c1015; cursor: default; content-visibility: auto; contain: layout paint style; contain-intrinsic-size: 190px 300px; transition: transform 150ms ease, border-color 150ms ease }
+.album-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid #242b34; border-radius: 11px; background: #0c1015; cursor: pointer; content-visibility: auto; contain: layout paint style; contain-intrinsic-size: 190px 300px; transition: transform 150ms ease, border-color 150ms ease }
 .album-card.folder { cursor: pointer }
 @media (hover: hover) { .album-card:hover { transform: translateY(-2px); border-color: #46515e } }
 .cover { position: relative; overflow: hidden; background: #0c1015 }
@@ -84,7 +84,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .type.zip { color: #a9c9ff; border-color: rgba(92,151,255,.62); background: rgba(15,35,69,.92) }
 .card-info { position: absolute; z-index: 2; right: 0; bottom: 0; left: 0; padding: 10px; background: linear-gradient(180deg, transparent, rgba(5,7,10,.67) 40%, rgba(5,7,10,.97)) }
 .card-info h2 { margin: 0; overflow: hidden; color: #f2f4f7; white-space: nowrap; text-overflow: ellipsis; font-size: 15px; font-weight: 620 }
-.card-info p { display: flex; align-items: center; gap: 7px; margin: 6px 0 0; color: #9da6b0; font-size: 11px; font-weight: 600 }
+.card-info p { display: flex; align-items: center; gap: 7px; margin: 6px 0 0; color: #9da6b0; font-size: 12px; font-weight: 600 }
 .card-info p i { width: 2px; height: 2px; border-radius: 50%; background: #626b75 }
 .album-grid.frosted .card-info { border-top: 1px solid rgba(255,255,255,.12); background: rgba(11,15,20,.7); backdrop-filter: blur(5px)}
 
@@ -117,23 +117,22 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .search { height: 42px; padding: 0 12px 0 36px; font-size: 14px }
 textarea { min-height: 150px; padding: 12px; resize: vertical; line-height: 1.7; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px }
 .search:focus, textarea:focus { border-color: #56678a }
-.section-label { min-height: 20px; display: flex; align-items: center; justify-content: space-between; color: #89939e; font-size: 14px; font-weight: 700; letter-spacing: .08em }
+.section-label { min-height: 20px; display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 700; letter-spacing: .08em }
 .section-label em { color: #59636e; font-style: normal; font-weight: 500; letter-spacing: 0 }
 .tree { flex: 1 1 auto; min-height: 120px; overflow: auto }
-.tree-row { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 7px; border-radius: 6px; color: #a9b1ba; font-size: 14px }
+.tree-row { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 7px; border-radius: 6px; font-size: 14px }
 .tree-row:hover { background: var(--surface-2); color: #d9dee4 }
 .tree-row.current { background: #20293a; color: #dce4ff }
 .tree-row > button, .tree-row > i { width: 15px; flex: 0 0 15px; padding: 0; color: #65707b; font-size: 15px }
 .tree-row label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: inherit }
 .tree-row small { color: #68737e; font-size: 11px }
-.tree-kind { width: 19px; height: 17px; display: grid; flex: 0 0 19px; place-items: center; border: 1px solid #48525d; border-radius: 4px; color: #89949f; font: 700 8px/1 ui-monospace, monospace }
+.tree-kind { width: 19px; height: 17px; display: grid; flex: 0 0 19px; place-items: center; border: 1px solid #5c97ff9e; border-radius: 4px; color: #a9c9ff; font: 700 8px/1 ui-monospace, monospace }
 .tree-kind.folder { border-color: #685a3f; color: #c6a96f }
 .tree-children { margin-left: 13px; padding-left: 5px; border-left: 1px solid #252c34 }
 .muted { color: #68727d; font-size: 13px }
 .task-section { flex: 0 1 28vh; min-height: 132px; display: flex; flex-direction: column; gap: 7px; overflow: hidden }
 .task-log { min-height: 105px; overflow: auto; padding: 10px; border: 1px solid #242d36; border-radius: 7px; background: #070a0d }
 .task-log p { display: grid; grid-template-columns: 62px 40px minmax(0, 1fr); gap: 8px; align-items: start; margin: 0 0 6px; word-break: break-all; font: 13px/1.55 "SFMono-Regular", Consolas, monospace }
-.task-log time { color: #929da8; font-variant-numeric: tabular-nums }
 .task-log p > b { color: #79a4ff; font-size: 13px; font-weight: 800 }
 .task-log p > span { color: #d7dde3 }
 .task-log p.ok > b { color: #69d591 }.task-log p.ok > span { color: #b9e8c8 }
@@ -162,6 +161,14 @@ textarea { min-height: 150px; padding: 12px; resize: vertical; line-height: 1.7;
 .context-menu button { display: block; width: 100%; padding: 10px 9px; border-radius: 6px; color: #bdc5cd; text-align: left; font-size: 14px }
 .context-menu button:hover { color: #eff2f5; background: var(--surface-3) }
 .context-menu hr { margin: 5px 4px; border: 0; border-top: 1px solid var(--line) }
+.cover-preview { position: fixed; z-index: 45; inset: 0; display: grid; place-items: center; padding: 28px; background: rgba(2,4,7,.9) }
+.cover-preview > img { display: block; max-width: 100%; max-height: calc(100vh - 56px); object-fit: contain }
+.preview-title { position: absolute; z-index: 2; top: 18px; left: 50%; max-width: min(72vw, 720px); overflow: hidden; padding: 8px 14px; border-radius: 6px; background: rgba(8,11,15,.58); color: #f1f3f5; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; transform: translateX(-50%); backdrop-filter: blur(8px) }
+.preview-nav { position: absolute; z-index: 2; top: 50%; display: grid; width: 44px; height: 54px; place-items: center; border-radius: 6px; background: rgba(8,11,15,.48); color: #e8edf1; transform: translateY(-50%) }
+.preview-nav:hover { background: rgba(31,38,46,.82) }
+.preview-nav svg { width: 24px; height: 24px }
+.preview-nav.previous { left: 18px }
+.preview-nav.next { right: 18px }
 .modal-wrap { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(3,5,8,.78) }
 .modal { width: min(540px, 100%); max-height: 70vh; padding: 20px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface) }
 .image-list { max-height: 50vh; overflow: auto; margin-top: 12px }
@@ -202,4 +209,9 @@ textarea { min-height: 150px; padding: 12px; resize: vertical; line-height: 1.7;
   .album-grid.horizontal { grid-template-columns: 1fr }
   .card-info { padding: 30px 54px 9px 10px }
   .drawer { padding: 18px }
+  .cover-preview { padding: 12px }
+  .cover-preview > img { max-height: calc(100vh - 24px) }
+  .preview-nav { width: 38px; height: 48px }
+  .preview-nav.previous { left: 6px }
+  .preview-nav.next { right: 6px }
 }

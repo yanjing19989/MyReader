@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+import mimetypes
 import os
 import subprocess
 import uuid
@@ -10,13 +11,13 @@ from typing import Literal
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 from .config import UPLOAD_DIR, VIEWER_PATH
-from .covers import child_albums, get_album, image_entries, make_thumbnail, set_cover
+from .covers import child_albums, get_album, image_entries, make_thumbnail, original_cover, set_cover
 from .db import album_dict, connect, init_db, invalidate_thumbs, path_key
 from .scanner import natural_key, normalize_path, refresh_all, scan_paths
 
@@ -185,6 +186,19 @@ async def album_cover(
         media_type="image/webp",
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
+
+
+@app.get("/api/albums/{album_id}/cover/original")
+async def album_cover_original(album_id: int):
+    result = await asyncio.to_thread(original_cover, album_id)
+    if not result:
+        raise HTTPException(404, "没有可用封面")
+    name, content = result
+    media_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    headers = {"Cache-Control": "public, max-age=31536000, immutable"}
+    if isinstance(content, Path):
+        return FileResponse(content, media_type=media_type, headers=headers)
+    return Response(content, media_type=media_type, headers=headers)
 
 
 @app.put("/api/albums/{album_id}/cover")
