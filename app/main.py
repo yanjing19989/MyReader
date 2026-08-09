@@ -268,6 +268,33 @@ def open_viewer(request: ViewerRequest):
     return {"ok": True}
 
 
+@app.post("/api/explorer/open")
+def open_explorer(request: ViewerRequest):
+    raw = Path(request.path).expanduser()
+    if not raw.is_absolute():
+        raise HTTPException(400, "必须提供绝对路径")
+    path = Path(normalize_path(raw))
+    valid = path.is_dir() if request.type == "folder" else path.is_file() and path.suffix.casefold() == ".zip"
+    if not valid:
+        raise HTTPException(400, "路径不存在或类型不匹配")
+    if os.name != "nt":
+        raise HTTPException(501, "当前系统不支持 Windows 资源管理器")
+    args = ["explorer.exe", str(path)] if request.type == "folder" else ["explorer.exe", "/select,", str(path)]
+    try:
+        subprocess.Popen(
+            args,
+            shell=False,
+            close_fds=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+    except OSError as exc:
+        raise HTTPException(500, f"无法打开资源管理器：{exc}") from exc
+    return {"ok": True}
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True}

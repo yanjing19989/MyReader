@@ -46,7 +46,7 @@ def child_albums(row) -> list[dict]:
     parent_key = path_key(row["path"])
     prefix = parent_key + "/"
     with connect() as conn:
-        rows = conn.execute("SELECT * FROM albums WHERE type = 'folder'").fetchall()
+        rows = conn.execute("SELECT * FROM albums").fetchall()
     children = []
     for candidate in rows:
         candidate_key = path_key(candidate["path"])

@@ -113,7 +113,12 @@ async function scan() {
 
 function showMenu(event, album) {
   event.preventDefault()
-  menu.value = { x: Math.min(event.clientX, innerWidth - 224), y: Math.min(event.clientY, innerHeight - 214), album }
+  menu.value = { x: Math.min(event.clientX, innerWidth - 224), y: Math.min(event.clientY, innerHeight - 250), album }
+}
+async function openExplorer(album) {
+  menu.value = null
+  try { await api('/api/explorer/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: album.path, type: album.type }) }) }
+  catch (e) { error.value = e.message }
 }
 async function openViewer(album) {
   menu.value = null
@@ -227,7 +232,8 @@ onBeforeUnmount(() => { clearTimeout(searchTimer); clearTimeout(clickTimer); win
     </aside>
 
     <div v-if="menu" class="context-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }">
-      <small>{{ menu.album.name }}</small><button @click="openViewer(menu.album)">用 LocalViewer 打开</button><hr />
+      <small>{{ menu.album.name }}</small><button @click="openExplorer(menu.album)">在资源管理器中打开</button>
+      <button @click="openViewer(menu.album)">用 LocalViewer 打开</button><hr />
       <button @click="defaultCover(menu.album)">使用默认封面</button>
       <button @click="chooseInternal(menu.album)">选择内部封面</button>
       <button @click="chooseUpload(menu.album)">上传封面</button>

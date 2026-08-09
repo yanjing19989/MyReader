@@ -110,6 +110,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Download package artifacts
         uses: actions/download-artifact@v4
         with:
@@ -120,12 +123,17 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           $archives = @(Get-ChildItem artifacts -Filter *.zip | ForEach-Object FullName)
-          if (gh release view $env:GITHUB_REF_NAME 2>$null) {
+          if ($archives.Count -eq 0) {
+            throw "No .zip artifacts found under artifacts/."
+          }
+
+          if (gh release view $env:GITHUB_REF_NAME --repo $env:GH_REPO 2>$null) {
             foreach ($archive in $archives) {
-              gh release upload $env:GITHUB_REF_NAME $archive --clobber
+              gh release upload $env:GITHUB_REF_NAME $archive --repo $env:GH_REPO --clobber
             }
           } else {
-            gh release create $env:GITHUB_REF_NAME @archives --generate-notes
+            gh release create $env:GITHUB_REF_NAME $archives --repo $env:GH_REPO --generate-notes
           }
