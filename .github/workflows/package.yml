@@ -1,0 +1,131 @@
+name: Package
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-windows:
+    name: Package Windows (${{ matrix.packager }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - packager: pyinstaller
+            artifact: MyReader-pyinstaller-windows-x64
+    env:
+      PACKAGER: ${{ matrix.packager }}
+      ARTIFACT_NAME: ${{ matrix.artifact }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install application dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Install PyInstaller
+        if: matrix.packager == 'pyinstaller'
+        run: uv pip install "pyinstaller>=6,<7"
+
+      - name: Build with PyInstaller
+        if: matrix.packager == 'pyinstaller'
+        shell: pwsh
+        run: |
+          $timer = [System.Diagnostics.Stopwatch]::StartNew()
+          uv run --no-sync pyinstaller `
+            --noconfirm `
+            --clean `
+            --onedir `
+            --name MyReader `
+            --icon frontend/favicon.ico `
+            --paths . `
+            --add-data "frontend/dist;frontend/dist" `
+            --collect-all uvicorn `
+            app/__main__.py
+          $exitCode = $LASTEXITCODE
+          $timer.Stop()
+          Write-Host "PyInstaller build elapsed: $($timer.Elapsed)"
+          if ($exitCode -ne 0) {
+            throw "PyInstaller failed with exit code $exitCode"
+          }
+          $dist = Resolve-Path dist/MyReader
+          "PACKAGE_DIR=$dist" >> $env:GITHUB_ENV
+
+      - name: Create release archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $archive = "artifacts/$env:ARTIFACT_NAME.zip"
+          Compress-Archive -Path "$env:PACKAGE_DIR\*" -DestinationPath $archive
+          $archiveInfo = Get-Item $archive
+          Write-Host ("ZIP size: {0:N2} MiB ({1:N0} bytes)" -f ($archiveInfo.Length / 1MB), $archiveInfo.Length)
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: artifacts/${{ matrix.artifact }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package-windows
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $archives = @(Get-ChildItem artifacts -Filter *.zip | ForEach-Object FullName)
+          if (gh release view $env:GITHUB_REF_NAME 2>$null) {
+            foreach ($archive in $archives) {
+              gh release upload $env:GITHUB_REF_NAME $archive --clobber
+            }
+          } else {
+            gh release create $env:GITHUB_REF_NAME @archives --generate-notes
+          }
