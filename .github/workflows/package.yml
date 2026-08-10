@@ -25,7 +25,6 @@ jobs:
             artifact: MyReader-pyinstaller-windows-x64
     env:
       PACKAGER: ${{ matrix.packager }}
-      ARTIFACT_NAME: ${{ matrix.artifact }}
 
     steps:
       - name: Check out repository
@@ -85,20 +84,11 @@ jobs:
           $dist = Resolve-Path dist/MyReader
           "PACKAGE_DIR=$dist" >> $env:GITHUB_ENV
 
-      - name: Create release archive
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force artifacts | Out-Null
-          $archive = "artifacts/$env:ARTIFACT_NAME.zip"
-          Compress-Archive -Path "$env:PACKAGE_DIR\*" -DestinationPath $archive
-          $archiveInfo = Get-Item $archive
-          Write-Host ("ZIP size: {0:N2} MiB ({1:N0} bytes)" -f ($archiveInfo.Length / 1MB), $archiveInfo.Length)
-
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: artifacts/${{ matrix.artifact }}.zip
+          path: ${{ env.PACKAGE_DIR }}
           if-no-files-found: error
 
   release:
@@ -117,7 +107,20 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true
+
+      - name: Create release archives
+        shell: pwsh
+        run: |
+          $artifactDirs = @(Get-ChildItem artifacts -Directory)
+          if ($artifactDirs.Count -eq 0) {
+            throw "No artifact directories found under artifacts/."
+          }
+          foreach ($dir in $artifactDirs) {
+            $zip = "artifacts/$($dir.Name).zip"
+            Compress-Archive -Path "$($dir.FullName)\*" -DestinationPath $zip
+            $zipInfo = Get-Item $zip
+            Write-Host ("ZIP {0}: {1:N2} MiB ({2:N0} bytes)" -f $zipInfo.Name, ($zipInfo.Length / 1MB), $zipInfo.Length)
+          }
 
       - name: Publish GitHub release
         shell: pwsh
@@ -125,9 +128,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          $archives = @(Get-ChildItem artifacts -Filter *.zip | ForEach-Object FullName)
+          $archives = @(Get-ChildItem artifacts -Filter *.zip -File | ForEach-Object FullName)
           if ($archives.Count -eq 0) {
-            throw "No .zip artifacts found under artifacts/."
+            throw "No release archives found under artifacts/."
           }
 
           if (gh release view $env:GITHUB_REF_NAME --repo $env:GH_REPO 2>$null) {
